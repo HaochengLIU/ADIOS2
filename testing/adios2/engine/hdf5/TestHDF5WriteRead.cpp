@@ -187,44 +187,77 @@ void HDF5NativeReader::ReadVar(const std::string varName, void *dataArray)
 // ADIOS2 write, native HDF5 read
 TEST_F(HDF5WriteReadTest, ADIOS2HDF5WriteHDF5Read1D8)
 {
+    // Each process would write a 1x8 array and all processes would
+    // form a mpiSize * Nx 1D array
     std::string fname = "ADIOS2HDF5WriteHDF5Read1D8.h5";
+
+    int mpiRank = 0, mpiSize = 1;
+    // Number of rows
+    const std::size_t Nx = 8;
+
+    // Number of steps
+    const std::size_t NSteps = 3;
+
+#ifdef ADIOS2_HAVE_MPI
+    MPI_Comm_rank(MPI_COMM_WORLD, &mpiRank);
+    MPI_Comm_size(MPI_COMM_WORLD, &mpiSize);
+#endif
 
     // Write test data using ADIOS2
     {
-        adios2::ADIOS adios(true); // moved up
+#ifdef ADIOS2_HAVE_MPI
+        adios2::ADIOS adios(MPI_COMM_WORLD, adios2::DebugON);
+#else
+        adios2::ADIOS adios(true);
+#endif
         adios2::IO &io = adios.DeclareIO("TestIO");
-        // Declare 1D variables
+
+        // Declare 1D variables (NumOfProcesses * Nx)
+        // The local process' part (start, count) can be defined now or later
+        // before Write().
         {
-            auto &var_i8 =
-                io.DefineVariable<int8_t>("i8", {}, {}, adios2::Dims{8});
+            adios2::Dims shape{static_cast<unsigned int>(Nx * mpiSize)};
+            adios2::Dims start{static_cast<unsigned int>(Nx * mpiRank)};
+            adios2::Dims count{static_cast<unsigned int>(Nx)};
+            auto &var_i8 = io.DefineVariable<int8_t>("i8", shape, start, count);
             auto &var_i16 =
-                io.DefineVariable<int16_t>("i16", {}, {}, adios2::Dims{8});
+                io.DefineVariable<int16_t>("i16", shape, start, count);
             auto &var_i32 =
-                io.DefineVariable<int32_t>("i32", {}, {}, adios2::Dims{8});
+                io.DefineVariable<int32_t>("i32", shape, start, count);
             auto &var_i64 =
-                io.DefineVariable<int64_t>("i64", {}, {}, adios2::Dims{8});
+                io.DefineVariable<int64_t>("i64", shape, start, count);
             auto &var_u8 =
-                io.DefineVariable<uint8_t>("u8", {}, {}, adios2::Dims{8});
+                io.DefineVariable<uint8_t>("u8", shape, start, count);
             auto &var_u16 =
-                io.DefineVariable<uint16_t>("u16", {}, {}, adios2::Dims{8});
+                io.DefineVariable<uint16_t>("u16", shape, start, count);
             auto &var_u32 =
-                io.DefineVariable<uint32_t>("u32", {}, {}, adios2::Dims{8});
+                io.DefineVariable<uint32_t>("u32", shape, start, count);
             auto &var_u64 =
-                io.DefineVariable<uint64_t>("u64", {}, {}, adios2::Dims{8});
+                io.DefineVariable<uint64_t>("u64", shape, start, count);
             auto &var_r32 =
-                io.DefineVariable<float>("r32", {}, {}, adios2::Dims{8});
+                io.DefineVariable<float>("r32", shape, start, count);
             auto &var_r64 =
-                io.DefineVariable<double>("r64", {}, {}, adios2::Dims{8});
+                io.DefineVariable<double>("r64", shape, start, count);
         }
 
-        // Create the HDF5 Engine
+        // Create the ADIOS 1 Engine
         io.SetEngine("HDF5Writer");
+
+#ifdef ADIOS2_HAVE_MPI
+        io.AddTransport("file", {{"library", "MPI"}});
+#else
+        io.AddTransport("file");
+#endif
 
         auto engine = io.Open(fname, adios2::OpenMode::Write);
         ASSERT_NE(engine.get(), nullptr);
 
-        for (size_t step = 0; step < 3; ++step)
+        for (size_t step = 0; step < NSteps; ++step)
         {
+            // Generate test data for each process uniquely
+            SmallTestData currentTestData =
+                generateNewSmallTestData(m_TestData, step, mpiRank, mpiSize);
+
             // Retrieve the variables that previously went out of scope
             auto &var_i8 = io.GetVariable<int8_t>("i8");
             auto &var_i16 = io.GetVariable<int16_t>("i16");
@@ -237,17 +270,33 @@ TEST_F(HDF5WriteReadTest, ADIOS2HDF5WriteHDF5Read1D8)
             auto &var_r32 = io.GetVariable<float>("r32");
             auto &var_r64 = io.GetVariable<double>("r64");
 
+            // Make a 1D selection to describe the local dimensions of the
+            // variable we write and its offsets in the global spaces
+            adios2::SelectionBoundingBox sel({mpiRank * Nx}, {Nx});
+            var_i8.SetSelection(sel);
+            var_i16.SetSelection(sel);
+            var_i32.SetSelection(sel);
+            var_i64.SetSelection(sel);
+            var_u8.SetSelection(sel);
+            var_u16.SetSelection(sel);
+            var_u32.SetSelection(sel);
+            var_u64.SetSelection(sel);
+            var_r32.SetSelection(sel);
+            var_r64.SetSelection(sel);
+
             // Write each one
-            engine->Write(var_i8, m_TestData.I8.data() + step);
-            engine->Write(var_i16, m_TestData.I16.data() + step);
-            engine->Write(var_i32, m_TestData.I32.data() + step);
-            engine->Write(var_i64, m_TestData.I64.data() + step);
-            engine->Write(var_u8, m_TestData.U8.data() + step);
-            engine->Write(var_u16, m_TestData.U16.data() + step);
-            engine->Write(var_u32, m_TestData.U32.data() + step);
-            engine->Write(var_u64, m_TestData.U64.data() + step);
-            engine->Write(var_r32, m_TestData.R32.data() + step);
-            engine->Write(var_r64, m_TestData.R64.data() + step);
+            // fill in the variable with values from starting index to
+            // starting index + count
+            engine->Write(var_i8, currentTestData.I8.data());
+            engine->Write(var_i16, currentTestData.I16.data());
+            engine->Write(var_i32, currentTestData.I32.data());
+            engine->Write(var_i64, currentTestData.I64.data());
+            engine->Write(var_u8, currentTestData.U8.data());
+            engine->Write(var_u16, currentTestData.U16.data());
+            engine->Write(var_u32, currentTestData.U32.data());
+            engine->Write(var_u64, currentTestData.U64.data());
+            engine->Write(var_r32, currentTestData.R32.data());
+            engine->Write(var_r64, currentTestData.R64.data());
 
             // Advance to the next time step
             engine->Advance();
@@ -257,29 +306,22 @@ TEST_F(HDF5WriteReadTest, ADIOS2HDF5WriteHDF5Read1D8)
         engine->Close();
     }
 
-// Read test data using HDF5
-#ifdef ADIOS2_HAVE_MPI
-    // Read everything from rank 0
-    int rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    if (rank == 0)
-#endif
     {
-        std::array<int8_t, 8> I8;
-        std::array<int16_t, 8> I16;
-        std::array<int32_t, 8> I32;
-        std::array<int64_t, 8> I64;
-        std::array<uint8_t, 8> U8;
-        std::array<uint16_t, 8> U16;
-        std::array<uint32_t, 8> U32;
-        std::array<uint64_t, 8> U64;
-        std::array<float, 8> R32;
-        std::array<double, 8> R64;
+        std::array<int8_t, Nx> I8;
+        std::array<int16_t, Nx> I16;
+        std::array<int32_t, Nx> I32;
+        std::array<int64_t, Nx> I64;
+        std::array<uint8_t, Nx> U8;
+        std::array<uint16_t, Nx> U16;
+        std::array<uint32_t, Nx> U32;
+        std::array<uint64_t, Nx> U64;
+        std::array<float, Nx> R32;
+        std::array<double, Nx> R64;
 
         HDF5NativeReader hdf5Reader(fname);
 
         // Read stuff
-        for (size_t t = 0; t < 3; ++t)
+        for (size_t t = 0; t < NSteps; ++t)
         {
             std::vector<hsize_t> gDims;
             hid_t h5Type;
@@ -288,80 +330,83 @@ TEST_F(HDF5WriteReadTest, ADIOS2HDF5WriteHDF5Read1D8)
 
             ASSERT_EQ(H5Tequal(h5Type, H5T_NATIVE_CHAR), 1);
             ASSERT_EQ(gDims.size(), 1);
-            ASSERT_EQ(gDims[0], 8);
+            ASSERT_EQ(gDims[0], Nx);
             hdf5Reader.ReadVar("i8", I8.data());
 
             hdf5Reader.GetVarInfo("i16", gDims, h5Type);
             ASSERT_EQ(H5Tequal(h5Type, H5T_NATIVE_SHORT), 1);
             ASSERT_EQ(gDims.size(), 1);
-            ASSERT_EQ(gDims[0], 8);
+            ASSERT_EQ(gDims[0], Nx);
             hdf5Reader.ReadVar("i16", I16.data());
 
             hdf5Reader.GetVarInfo("i32", gDims, h5Type);
             ASSERT_EQ(H5Tequal(h5Type, H5T_NATIVE_INT), 1);
             ASSERT_EQ(gDims.size(), 1);
-            ASSERT_EQ(gDims[0], 8);
+            ASSERT_EQ(gDims[0], Nx);
             hdf5Reader.ReadVar("i32", I32.data());
 
             hdf5Reader.GetVarInfo("i64", gDims, h5Type);
             ASSERT_EQ(H5Tequal(h5Type, H5T_NATIVE_LONG), 1);
             ASSERT_EQ(gDims.size(), 1);
-            ASSERT_EQ(gDims[0], 8);
+            ASSERT_EQ(gDims[0], Nx);
             hdf5Reader.ReadVar("i64", I64.data());
 
             hdf5Reader.GetVarInfo("u8", gDims, h5Type);
             ASSERT_EQ(H5Tequal(h5Type, H5T_NATIVE_UCHAR), 1);
             ASSERT_EQ(gDims.size(), 1);
-            ASSERT_EQ(gDims[0], 8);
+            ASSERT_EQ(gDims[0], Nx);
             hdf5Reader.ReadVar("u8", U8.data());
 
             hdf5Reader.GetVarInfo("u16", gDims, h5Type);
             ASSERT_EQ(H5Tequal(h5Type, H5T_NATIVE_USHORT), 1);
             ASSERT_EQ(gDims.size(), 1);
-            ASSERT_EQ(gDims[0], 8);
+            ASSERT_EQ(gDims[0], Nx);
             hdf5Reader.ReadVar("u16", U16.data());
 
             hdf5Reader.GetVarInfo("u32", gDims, h5Type);
             ASSERT_EQ(H5Tequal(h5Type, H5T_NATIVE_UINT), 1);
             ASSERT_EQ(gDims.size(), 1);
-            ASSERT_EQ(gDims[0], 8);
+            ASSERT_EQ(gDims[0], Nx);
             hdf5Reader.ReadVar("u32", U32.data());
 
             hdf5Reader.GetVarInfo("u64", gDims, h5Type);
             ASSERT_EQ(H5Tequal(h5Type, H5T_NATIVE_ULONG), 1);
             ASSERT_EQ(gDims.size(), 1);
-            ASSERT_EQ(gDims[0], 8);
+            ASSERT_EQ(gDims[0], Nx);
             hdf5Reader.ReadVar("u64", U64.data());
 
             hdf5Reader.GetVarInfo("r32", gDims, h5Type);
             ASSERT_EQ(H5Tequal(h5Type, H5T_NATIVE_FLOAT), 1);
             ASSERT_EQ(gDims.size(), 1);
-            ASSERT_EQ(gDims[0], 8);
+            ASSERT_EQ(gDims[0], Nx);
             hdf5Reader.ReadVar("r32", R32.data());
 
             hdf5Reader.GetVarInfo("r64", gDims, h5Type);
             ASSERT_EQ(H5Tequal(h5Type, H5T_NATIVE_DOUBLE), 1);
             ASSERT_EQ(gDims.size(), 1);
-            ASSERT_EQ(gDims[0], 8);
+            ASSERT_EQ(gDims[0], Nx);
             hdf5Reader.ReadVar("r64", R64.data());
 
+            // Generate test data for each process uniquely
+            SmallTestData currentTestData =
+                generateNewSmallTestData(m_TestData, t, mpiRank, mpiSize);
             // Check if it's correct
-            for (size_t i = 0; i < 8; ++i)
+            for (size_t i = 0; i < Nx; ++i)
             {
                 std::stringstream ss;
                 ss << "t=" << t << " i=" << i;
                 std::string msg = ss.str();
 
-                EXPECT_EQ(I8[i], m_TestData.I8[i + t]) << msg;
-                EXPECT_EQ(I16[i], m_TestData.I16[i + t]) << msg;
-                EXPECT_EQ(I32[i], m_TestData.I32[i + t]) << msg;
-                EXPECT_EQ(I64[i], m_TestData.I64[i + t]) << msg;
-                EXPECT_EQ(U8[i], m_TestData.U8[i + t]) << msg;
-                EXPECT_EQ(U16[i], m_TestData.U16[i + t]) << msg;
-                EXPECT_EQ(U32[i], m_TestData.U32[i + t]) << msg;
-                EXPECT_EQ(U64[i], m_TestData.U64[i + t]) << msg;
-                EXPECT_EQ(R32[i], m_TestData.R32[i + t]) << msg;
-                EXPECT_EQ(R64[i], m_TestData.R64[i + t]) << msg;
+                EXPECT_EQ(I8[i], currentTestData.I8[i]) << msg;
+                EXPECT_EQ(I16[i], currentTestData.I16[i]) << msg;
+                EXPECT_EQ(I32[i], currentTestData.I32[i]) << msg;
+                EXPECT_EQ(I64[i], currentTestData.I64[i]) << msg;
+                EXPECT_EQ(U8[i], currentTestData.U8[i]) << msg;
+                EXPECT_EQ(U16[i], currentTestData.U16[i]) << msg;
+                EXPECT_EQ(U32[i], currentTestData.U32[i]) << msg;
+                EXPECT_EQ(U64[i], currentTestData.U64[i]) << msg;
+                EXPECT_EQ(R32[i], currentTestData.R32[i]) << msg;
+                EXPECT_EQ(R64[i], currentTestData.R64[i]) << msg;
             }
 
             hdf5Reader.Advance();
@@ -390,7 +435,7 @@ TEST_F(HDF5WriteReadTest, DISABLED_HDF5WriteADIOS2HDF5Read1D8)
 //******************************************************************************
 
 // ADIOS2 write, native HDF5 read
-TEST_F(HDF5WriteReadTest, ADIOS2HDF5WriteHDF5Read2D2x4)
+TEST_F(HDF5WriteReadTest, DISABLED_ADIOS2HDF5WriteHDF5Read2D2x4)
 {
     std::string fname = "ADIOS2HDF5WriteHDF5Read2D2x4Test.h5";
 
@@ -605,7 +650,7 @@ TEST_F(HDF5WriteReadTest, DISABLED_HDF5WriteADIOS2HDF5Read2D2x4)
 //******************************************************************************
 
 // ADIOS2 write, native HDF5 read
-TEST_F(HDF5WriteReadTest, ADIOS2HDF5WriteHDF5Read2D4x2)
+TEST_F(HDF5WriteReadTest, DIABLED_ADIOS2HDF5WriteHDF5Read2D4x2)
 {
     std::string fname = "ADIOS2HDF5WriteHDF5Read2D4x2Test.h5";
 
