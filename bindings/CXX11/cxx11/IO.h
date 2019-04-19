@@ -16,6 +16,10 @@
 #include "Operator.h"
 #include "Variable.h"
 
+#if __cplusplus > 201402L
+#include "VariableVariant.h"
+#endif
+
 #ifdef ADIOS2_HAVE_MPI
 #include <mpi.h>
 #endif
@@ -131,6 +135,15 @@ public:
     DefineVariable(const std::string &name, const Dims &shape = Dims(),
                    const Dims &start = Dims(), const Dims &count = Dims(),
                    const bool constantDims = false);
+
+    /**
+     * Retrieve a VariableVariant object within current IO object
+     * @param name unique variable identifier within IO object
+     * @param type type enum ofthe variable
+     * @return if found Variable object is true and has functionality, else
+     * false and has no functionality
+     */
+    VariableVariant InquireVariable(const std::string &name, const std::string &type);
 
     /**
      * Retrieve a Variable object within current IO object

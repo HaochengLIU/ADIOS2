@@ -92,6 +92,14 @@ if(NOT MSVC)
   set(CMAKE_C_STANDARD_REQUIRED True)
 endif()
 
+if (cxx_std_17 IN_LIST CMAKE_CXX_COMPILE_FEATURES)
+  option(ADIOS2_ENABLE_17_FEATURES "Enable c++17 features" OFF)
+endif()
+
+if (ADIOS2_ENABLE_17_FEATURES)
+  set(CMAKE_CXX_STANDARD 17)
+endif()
+
 # Use meta-compile features if available, otherwise use specific language
 # features
 if(CMAKE_VERSION VERSION_LESS 3.9 OR

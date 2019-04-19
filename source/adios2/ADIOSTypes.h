@@ -200,6 +200,29 @@ using Box = std::pair<T, T>;
 template <typename T, typename Enable = void>
 struct TypeInfo;
 
+namespace detail
+{
+/** TMP code to store a list of types supported by ADIOS2
+  */
+template<typename... Types>
+struct List
+{};
+
+template<typename... ArgTypes>
+struct ListTagBase
+{
+    using list = List<ArgTypes...>;
+};
+
+struct CommonTypes: ListTagBase<std::string, char, signed char, unsigned char, short,
+        unsigned short, int, unsigned int, long int, long long int, unsigned long int,
+        unsigned long long int, float, double, long double, std::complex<float>,
+        std::complex<double>>
+{
+};
+
+}
+
 } // end namespace adios2
 
 #include "ADIOSTypes.inl"

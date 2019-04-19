@@ -187,6 +187,12 @@ TEST_F(BPWriteReadTestADIOS2, ADIOS2BPWriteRead1D8)
         ASSERT_EQ(var_i8.Steps(), NSteps);
         ASSERT_EQ(var_i8.Shape()[0], mpiSize * Nx);
 
+        auto var_i8V = io.InquireVariable("i8", "int8_t");
+        EXPECT_TRUE(var_i8V);
+        ASSERT_EQ(var_i8V.ShapeID(), adios2::ShapeID::GlobalArray);
+        ASSERT_EQ(var_i8V.Steps(), NSteps);
+        ASSERT_EQ(var_i8V.Shape()[0], mpiSize * Nx);
+
         auto var_i16 = io.InquireVariable<int16_t>("i16");
         EXPECT_TRUE(var_i16);
         ASSERT_EQ(var_i16.ShapeID(), adios2::ShapeID::GlobalArray);
@@ -1079,7 +1085,7 @@ TEST_F(BPWriteReadTestADIOS2, ADIOS2BPWriteRead2D4x2_ReadMultiSteps)
 
         adios2::Engine bpReader = io.Open(fname, adios2::Mode::Read);
 
-        auto var_i8 = io.InquireVariable<int8_t>("i8");
+        auto var_i8 = io.InquireVariable("i8", "int8_t");
         EXPECT_TRUE(var_i8);
         ASSERT_EQ(var_i8.ShapeID(), adios2::ShapeID::GlobalArray);
         ASSERT_EQ(var_i8.Steps(), NSteps);
@@ -1194,7 +1200,7 @@ TEST_F(BPWriteReadTestADIOS2, ADIOS2BPWriteRead2D4x2_ReadMultiSteps)
         var_r32.SetStepSelection({tInitial, NSteps - tInitial});
         var_r64.SetStepSelection({tInitial, NSteps - tInitial});
 
-        bpReader.Get(var_i8, I8.data());
+        bpReader.Get(var_i8.Name(), I8.data());
         bpReader.Get(var_i16, I16.data());
         bpReader.Get(var_i32, I32.data());
         bpReader.Get(var_i64, I64.data());

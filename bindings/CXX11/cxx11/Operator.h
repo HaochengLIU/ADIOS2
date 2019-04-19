@@ -38,6 +38,9 @@ class Operator
 
     template <class T>
     friend class Variable;
+#if __cplusplus > 201402L
+    friend class VariableVariant;
+#endif
 
 public:
     /**

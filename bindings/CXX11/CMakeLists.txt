@@ -3,6 +3,11 @@
 # accompanying file Copyright.txt for details.
 #------------------------------------------------------------------------------#
 
+set(cxx17_sources )
+if (ADIOS2_ENABLE_17_FEATURES)
+  list(APPEND cxx17_sources ${CMAKE_CURRENT_SOURCE_DIR}/cxx11/VariableVariant.cpp)
+endif()
+
 target_sources(adios2 PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/cxx11/ADIOS.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/cxx11/Attribute.cpp 
@@ -15,6 +20,7 @@ target_sources(adios2 PRIVATE
 	${CMAKE_CURRENT_SOURCE_DIR}/cxx11/Types.tcc
 	${CMAKE_CURRENT_SOURCE_DIR}/cxx11/Variable.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/cxx11/fstream/ADIOS2fstream.cpp
+  ${cxx17_sources}
 )
 
 target_include_directories(adios2
@@ -32,6 +38,11 @@ install(
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cxx11/fstream
 )
 
+set(cxx17_headers )
+if (ADIOS2_ENABLE_17_FEATURES)
+  list(APPEND cxx17_sources ${CMAKE_CURRENT_SOURCE_DIR}/cxx11/VariableVariant.h)
+endif()
+
 install(
   FILES cxx11/ADIOS.h 
         cxx11/ADIOS.inl
@@ -41,5 +52,6 @@ install(
         cxx11/Engine.h
         cxx11/Operator.h
         cxx11/Types.h
+        ${cxx17_headers}
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cxx11
 )

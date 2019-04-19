@@ -62,6 +62,82 @@ void IO::SetTransportParameter(const size_t transportIndex,
     m_IO->SetTransportParameter(transportIndex, key, value);
 }
 
+#if __cplusplus > 201402L
+VariableVariant IO::InquireVariable(const std::string &name, const std::string &type)
+{
+    VariableVariant var;
+    if (type == "char")
+    {
+      var = this->InquireVariable<char>(name);
+    }
+    else if (type == "int")
+    {
+      var = this->InquireVariable<int>(name);
+    }
+    if (type == "float")
+    {
+      var = this->InquireVariable<float>(name);
+    }
+    else if (type == "double")
+    {
+      var = this->InquireVariable<double>(name);
+    }
+    if (type == "float complex")
+    {
+      var = this->InquireVariable<std::complex<float>>(name);
+    }
+    else if (type == "double complex")
+    {
+      var = this->InquireVariable<std::complex<double>>(name);
+    }
+    if (type == "signed char")
+    {
+      var = this->InquireVariable<signed char>(name);
+    }
+    else if (type == "short")
+    {
+      var = this->InquireVariable<short>(name);
+    }
+    else if (type == "long int")
+    {
+      var = this->InquireVariable<long int>(name);
+    }
+    else if (type == "long long int")
+    {
+      var = this->InquireVariable<long long int>(name);
+    }
+    else if (type == "string")
+    {
+      var = this->InquireVariable<std::string>(name);
+    }
+    else if (type == "string array")
+    {
+      var = this->InquireVariable<int64_t>(name);
+    }
+    else if (type == "unsigned char")
+    {
+      var = this->InquireVariable<int8_t>(name);
+    }
+    else if (type == "unsigned short")
+    {
+      var = this->InquireVariable<int64_t>(name);
+    }
+    else if (type == "unsigned int")
+    {
+      var = this->InquireVariable<int8_t>(name);
+    }
+    else if (type == "unsigned long int")
+    {
+      var = this->InquireVariable<int8_t>(name);
+    }
+    else if (type == "unsigned long long int")
+    {
+      var = this->InquireVariable<int8_t>(name);
+    }
+    return var;
+}
+#endif
+
 bool IO::RemoveVariable(const std::string &name)
 {
     helper::CheckForNullptr(m_IO, "in call to IO::RemoveVariable");
